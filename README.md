@@ -1,12 +1,8 @@
 # New Grad Opportunities Visualization Project
 
-### Project Proposal
+## Project Proposal
 
-[Project proposal goes here]
-
-IDS Project Proposal
-Team Members: Victor Wang, Sarah Yun, Mark Pindur, Ojas Vashishtha
-
+### Team Members: Victor Wang, Sarah Yun, Mark Pindur, Ojas Vashishtha
 
 Our project proposal involves working with a dataset regarding employment from the CORGIS Dataset Project. The data in this library comes from the National Survey of Recent College Graduates, and it is accessible and downloadable straight from the hyperlinked website. This dataset includes fields such as the major and degree for graduated students, salaries, demographic information, employment status, reasons for unemployment and industry of employment.
 
