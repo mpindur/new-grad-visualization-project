@@ -19,31 +19,33 @@ df = pd.read_csv("data/raw_graduates.csv")
 # ---------------------
 st.sidebar.header("Filters")
 
-# Map friendly degree names to the CSV column names present in the dataset
-degree_map = {
-	"All": None,
-	"Bachelors": "Education.Degrees.Bachelors",
-	"Masters": "Education.Degrees.Masters",
-	"Doctorates": "Education.Degrees.Doctorates",
-	"Professionals": "Education.Degrees.Professionals",
-}
-
-selected_degree = st.sidebar.selectbox("Degree", list(degree_map.keys()), index=1)
-
-# Apply degree filter. Note: this dataset stores counts by degree in columns
-# (e.g. Education.Degrees.Bachelors) rather than a single categorical column.
-# Here we treat a row as relevant to a degree if the corresponding degree
-# column value is > 0. This is a conservative, easy-to-understand filter.
-if degree_map[selected_degree] is None:
-	filtered_df = df.copy()
+# Build majors filter (use Education.Major column)
+# If the column exists, populate the multiselect with present majors; include an "All" option
+majors_column = "Education.Major"
+if majors_column in df.columns:
+	majors = sorted(df[majors_column].dropna().astype(str).unique())
+	major_options = ["All"] + majors
 else:
-	col = degree_map[selected_degree]
-	if col not in df.columns:
-		st.warning(f"Degree column {col} not found in dataset. Showing all rows.")
-		filtered_df = df.copy()
+	majors = []
+	major_options = ["All"]
+
+# Allow selecting multiple majors; default to All
+selected_majors = st.sidebar.multiselect("Major", major_options, default=["All"]) if len(major_options) > 0 else []
+
+# Start with the full dataframe, then apply filters below
+filtered_df = df.copy()
+
+# Apply major filter: keep rows whose Education.Major is in the selected majors
+if selected_majors and "All" not in selected_majors:
+	if majors_column not in df.columns:
+		st.warning(f"Major column {majors_column} not found in dataset. Showing all rows.")
 	else:
-		# Keep rows where there were graduates with the chosen degree
-		filtered_df = df[df[col].fillna(0) > 0]
+		try:
+			# compare as strings after filling NaNs
+			mask = df[majors_column].fillna("").astype(str).isin(selected_majors)
+			filtered_df = df[mask].copy()
+		except Exception:
+			st.warning("Could not apply major filter due to unexpected column values. Showing all rows.")
 
 	# ---------------------
 	# Year filters (two dropdowns: start and end)
@@ -93,8 +95,14 @@ else:
 
 st.markdown("Please choose a dashboard using the sidebar on the left.")
 
-# Quick summary for the selected degree
-st.subheader(f"Data preview — Degree: {selected_degree}")
+# Quick summary for the selected major(s)
+# Prepare a label for the selected majors for display
+if not selected_majors or "All" in selected_majors:
+	majors_label = "All"
+else:
+	majors_label = ", ".join(selected_majors)
+
+st.subheader(f"Data preview — Major: {majors_label}")
 st.write(f"Rows matching filter: {len(filtered_df):,}")
 
 # Show a small summary metric (median of the reported median salary for the filtered rows)
@@ -107,6 +115,81 @@ if "Salaries.Median" in filtered_df.columns:
 			st.info("Median salary not available for the selection.")
 	except Exception:
 		st.info("Could not compute median salary for the selection.")
+
+# ---------------------
+# Pie charts: Ethnicity, Gender, Degree type (based on filtered_df)
+# ---------------------
+def make_pie_chart(labels, values, title):
+	import pandas as _pd
+	if len(labels) == 0 or sum(values) == 0:
+		return None
+	pie_df = _pd.DataFrame({"category": labels, "value": values})
+	pie_df = pie_df[pie_df["value"] > 0]
+	if pie_df.empty:
+		return None
+	pie_df["pct"] = (pie_df["value"] / pie_df["value"].sum() * 100).round(1)
+	chart = alt.Chart(pie_df).mark_arc(innerRadius=20).encode(
+		theta=alt.Theta(field="value", type="quantitative"),
+		color=alt.Color(field="category", type="nominal", legend=alt.Legend(title=title)),
+		tooltip=[alt.Tooltip("category:N", title=title), alt.Tooltip("value:Q", title="Count"), alt.Tooltip("pct:Q", title="%")],
+	).properties(width=250, height=250)
+	return chart
+
+col1, col2, col3 = st.columns(3)
+
+# Ethnicity pie
+eth_prefix = "Demographics.Ethnicity."
+eth_cols = [c for c in filtered_df.columns if c.startswith(eth_prefix)]
+if eth_cols:
+	eth_labels = [c.replace(eth_prefix, "") for c in eth_cols]
+	eth_values = filtered_df[eth_cols].fillna(0).sum(axis=0).astype(float).tolist()
+	eth_chart = make_pie_chart(eth_labels, eth_values, "Ethnicity")
+	with col1:
+		st.subheader("Ethnicity")
+		if eth_chart is not None:
+			st.altair_chart(eth_chart, use_container_width=False)
+		else:
+			st.info("No ethnicity data to display for the current filter.")
+else:
+	with col1:
+		st.subheader("Ethnicity")
+		st.info("Ethnicity columns not found in dataset.")
+
+# Gender pie
+gen_prefix = "Demographics.Gender."
+gen_cols = [c for c in filtered_df.columns if c.startswith(gen_prefix)]
+if gen_cols:
+	gen_labels = [c.replace(gen_prefix, "") for c in gen_cols]
+	gen_values = filtered_df[gen_cols].fillna(0).sum(axis=0).astype(float).tolist()
+	gen_chart = make_pie_chart(gen_labels, gen_values, "Gender")
+	with col2:
+		st.subheader("Gender")
+		if gen_chart is not None:
+			st.altair_chart(gen_chart, use_container_width=False)
+		else:
+			st.info("No gender data to display for the current filter.")
+else:
+	with col2:
+		st.subheader("Gender")
+		st.info("Gender columns not found in dataset.")
+
+# Degree type pie
+deg_prefix = "Education.Degrees."
+deg_cols = [c for c in filtered_df.columns if c.startswith(deg_prefix)]
+if deg_cols:
+	deg_labels = [c.replace(deg_prefix, "") for c in deg_cols]
+	deg_values = filtered_df[deg_cols].fillna(0).sum(axis=0).astype(float).tolist()
+	deg_chart = make_pie_chart(deg_labels, deg_values, "Degree Type")
+	with col3:
+		st.subheader("Degree type")
+		if deg_chart is not None:
+			st.altair_chart(deg_chart, use_container_width=False)
+		else:
+			st.info("No degree data to display for the current filter.")
+else:
+	with col3:
+		st.subheader("Degree type")
+		st.info("Degree columns not found in dataset.")
 
 st.dataframe(filtered_df)
 
