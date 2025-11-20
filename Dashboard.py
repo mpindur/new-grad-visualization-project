@@ -45,6 +45,52 @@ else:
 		# Keep rows where there were graduates with the chosen degree
 		filtered_df = df[df[col].fillna(0) > 0]
 
+	# ---------------------
+	# Year filters (two dropdowns: start and end)
+	# - Default is no selection (empty string)
+	# - If only start selected -> filter that year
+	# - If both selected -> filter inclusive range between start and end
+
+	# Prepare year options from the dataset (only years that actually appear)
+	if "Year" in df.columns:
+		# coerce to numeric to be safe, drop NaNs, get unique sorted
+		years_numeric = pd.to_numeric(df["Year"], errors="coerce").dropna().astype(int)
+		present_years = sorted(years_numeric.unique()) if len(years_numeric) > 0 else []
+		# keep an empty default option followed by only present years
+		year_options = [""] + [str(y) for y in present_years]
+	else:
+		year_options = [""]
+
+	start_year = st.sidebar.selectbox("From year", year_options, index=0)
+	# second dropdown disabled unless the first has a year selected
+	end_disabled = (start_year == "")
+	# Build end-year options so they cannot be earlier than the selected start year
+	if start_year == "":
+		end_options = year_options
+	else:
+		try:
+			s_num = int(start_year)
+			# only allow end years that are >= start year
+			end_options = [""] + [str(y) for y in present_years if y >= s_num]
+		except Exception:
+			end_options = year_options
+
+	end_year = st.sidebar.selectbox("To year", end_options, index=0, disabled=end_disabled)
+
+	# Apply year filtering to filtered_df (if any selection)
+	if start_year != "":
+		try:
+			s = int(start_year)
+			if end_year != "":
+				e = int(end_year)
+				lo, hi = (min(s, e), max(s, e))
+				filtered_df = filtered_df[pd.to_numeric(filtered_df["Year"], errors="coerce").between(lo, hi)]
+			else:
+				# only start year selected -> exact match
+				filtered_df = filtered_df[pd.to_numeric(filtered_df["Year"], errors="coerce").fillna(-9999).astype(int) == s]
+		except Exception:
+			st.warning("Could not apply year filter due to unexpected Year values.")
+
 st.markdown("Please choose a dashboard using the sidebar on the left.")
 
 # Quick summary for the selected degree
