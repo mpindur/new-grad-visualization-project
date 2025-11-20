@@ -154,6 +154,81 @@ if "Salaries.Median" in filtered_df.columns:
 	except Exception:
 		st.info("Could not compute median salary for the selection.")
 
+# ---------------------
+# Pie charts: Ethnicity, Gender, Degree type (based on filtered_df)
+# ---------------------
+def make_pie_chart(labels, values, title):
+	import pandas as _pd
+	if len(labels) == 0 or sum(values) == 0:
+		return None
+	pie_df = _pd.DataFrame({"category": labels, "value": values})
+	pie_df = pie_df[pie_df["value"] > 0]
+	if pie_df.empty:
+		return None
+	pie_df["pct"] = (pie_df["value"] / pie_df["value"].sum() * 100).round(1)
+	chart = alt.Chart(pie_df).mark_arc(innerRadius=20).encode(
+		theta=alt.Theta(field="value", type="quantitative"),
+		color=alt.Color(field="category", type="nominal", legend=alt.Legend(title=title)),
+		tooltip=[alt.Tooltip("category:N", title=title), alt.Tooltip("value:Q", title="Count"), alt.Tooltip("pct:Q", title="%")],
+	).properties(width=250, height=250)
+	return chart
+
+col1, col2, col3 = st.columns(3)
+
+# Ethnicity pie
+eth_prefix = "Demographics.Ethnicity."
+eth_cols = [c for c in filtered_df.columns if c.startswith(eth_prefix)]
+if eth_cols:
+	eth_labels = [c.replace(eth_prefix, "") for c in eth_cols]
+	eth_values = filtered_df[eth_cols].fillna(0).sum(axis=0).astype(float).tolist()
+	eth_chart = make_pie_chart(eth_labels, eth_values, "Ethnicity")
+	with col1:
+		st.subheader("Ethnicity")
+		if eth_chart is not None:
+			st.altair_chart(eth_chart, use_container_width=False)
+		else:
+			st.info("No ethnicity data to display for the current filter.")
+else:
+	with col1:
+		st.subheader("Ethnicity")
+		st.info("Ethnicity columns not found in dataset.")
+
+# Gender pie
+gen_prefix = "Demographics.Gender."
+gen_cols = [c for c in filtered_df.columns if c.startswith(gen_prefix)]
+if gen_cols:
+	gen_labels = [c.replace(gen_prefix, "") for c in gen_cols]
+	gen_values = filtered_df[gen_cols].fillna(0).sum(axis=0).astype(float).tolist()
+	gen_chart = make_pie_chart(gen_labels, gen_values, "Gender")
+	with col2:
+		st.subheader("Gender")
+		if gen_chart is not None:
+			st.altair_chart(gen_chart, use_container_width=False)
+		else:
+			st.info("No gender data to display for the current filter.")
+else:
+	with col2:
+		st.subheader("Gender")
+		st.info("Gender columns not found in dataset.")
+
+# Degree type pie
+deg_prefix = "Education.Degrees."
+deg_cols = [c for c in filtered_df.columns if c.startswith(deg_prefix)]
+if deg_cols:
+	deg_labels = [c.replace(deg_prefix, "") for c in deg_cols]
+	deg_values = filtered_df[deg_cols].fillna(0).sum(axis=0).astype(float).tolist()
+	deg_chart = make_pie_chart(deg_labels, deg_values, "Degree Type")
+	with col3:
+		st.subheader("Degree type")
+		if deg_chart is not None:
+			st.altair_chart(deg_chart, use_container_width=False)
+		else:
+			st.info("No degree data to display for the current filter.")
+else:
+	with col3:
+		st.subheader("Degree type")
+		st.info("Degree columns not found in dataset.")
+
 st.dataframe(filtered_df)
 
 
