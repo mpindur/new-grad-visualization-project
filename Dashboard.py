@@ -30,6 +30,10 @@ degree_map = {
 
 selected_degree = st.sidebar.selectbox("Degree", list(degree_map.keys()), index=1)
 
+# Apply degree filter. Note: this dataset stores counts by degree in columns
+# (e.g. Education.Degrees.Bachelors) rather than a single categorical column.
+# Here we treat a row as relevant to a degree if the corresponding degree
+# column value is > 0. This is a conservative, easy-to-understand filter.
 if degree_map[selected_degree] is None:
 	filtered_df = df.copy()
 else:
@@ -40,8 +44,14 @@ else:
 	else:
 		# Keep rows where there were graduates with the chosen degree
 		filtered_df = df[df[col].fillna(0) > 0]
-    
 
+	# ---------------------
+	# Year filters (two dropdowns: start and end)
+	# - Default is no selection (empty string)
+	# - If only start selected -> filter that year
+	# - If both selected -> filter inclusive range between start and end
+
+	# Prepare year options from the dataset (only years that actually appear)
 	if "Year" in df.columns:
 		# coerce to numeric to be safe, drop NaNs, get unique sorted
 		years_numeric = pd.to_numeric(df["Year"], errors="coerce").dropna().astype(int)
@@ -80,62 +90,6 @@ else:
 				filtered_df = filtered_df[pd.to_numeric(filtered_df["Year"], errors="coerce").fillna(-9999).astype(int) == s]
 		except Exception:
 			st.warning("Could not apply year filter due to unexpected Year values.")
-			
-major_options = sorted(filtered_df['Education.Major'].unique())
-major_options.insert(0, "All")
-
-selected_major = st.sidebar.selectbox(
-    "Major",
-    options=major_options,
-    index=0
-)
-
-# Apply the major filter to filtered_df
-if selected_major != "All":
-    filtered_df = filtered_df[filtered_df['Education.Major'] == selected_major]
-	
-gender_map = {
-    "All": None,
-    "Female": "Demographics.Gender.Females", # Using plural name for the dataset
-    "Male": "Demographics.Gender.Males",     # Using plural name for the dataset
-}
-
-selected_gender = st.sidebar.selectbox(
-    "Gender",
-    list(gender_map.keys()),
-    index=0 # Default to 'All'
-)
-
-# Apply the gender filter to filtered_df
-if gender_map[selected_gender] is not None:
-    col = gender_map[selected_gender]
-    if col not in filtered_df.columns:
-        st.warning(f"Gender column {col} not found in dataset. Showing all rows from previous filter.")
-    else:
-        # Keep rows where the count in the selected gender column is greater than 0
-        filtered_df = filtered_df[filtered_df[col].fillna(0) > 0]
-
-employment_map = {
-    "All": None,
-    "Employed": "Employment.Status.Employed",
-    "Unemployed": "Employment.Status.Unemployed",
-    "Not in Labor Force": "Employment.Status.Not in Labor Force",
-}
-
-selected_employment = st.sidebar.selectbox(
-    "Employment Status",
-    list(employment_map.keys()),
-    index=0
-)
-
-# Apply the employment filter to filtered_df
-if employment_map[selected_employment] is not None:
-    col = employment_map[selected_employment]
-    if col not in filtered_df.columns:
-        st.warning(f"Employment column {col} not found in dataset. Showing all rows from previous filter.")
-    else:
-        # Keep rows where the count for the selected status is greater than 0
-        filtered_df = filtered_df[filtered_df[col].fillna(0) > 0]
 
 st.markdown("Please choose a dashboard using the sidebar on the left.")
 
@@ -157,75 +111,3 @@ if "Salaries.Median" in filtered_df.columns:
 st.dataframe(filtered_df)
 
 
-major_counts = filtered_df.groupby("Education.Major")["Demographics.Total"].sum().reset_index()
-major_counts.columns = ["Major", "Count"]
-
-total_females = filtered_df["Demographics.Gender.Females"].sum()
-total_males = filtered_df["Demographics.Gender.Males"].sum()
-
-gender_data = {
-    "Category": ["Female", "Male"],
-    "Count": [total_females, total_males],
-}
-gender_counts = pd.DataFrame(gender_data)
-
-major_base = alt.Chart(major_counts).encode(
-    theta=alt.Theta("Count:Q", stack=True)
-).transform_joinaggregate(
-    TotalGraduates='sum(Count)',
-    groupby=[]
-).transform_calculate(
-    Percentage="datum.Count / datum.TotalGraduates"
-)
-
-# Outer Pie Marks (Donut shape)
-outer_pie = major_base.mark_arc(outerRadius=120, innerRadius=80).encode(
-    color=alt.Color("Major:N"),
-    order=alt.Order("Count:Q", sort="descending"),
-    tooltip=[
-        "Major:N",
-        alt.Tooltip("Count:Q", format=","),
-        alt.Tooltip("Percentage:Q", format=".1%", title="Proportion")
-    ]
-)
-
-# Outer Text Labels (showing percentages)
-outer_text = major_base.mark_text(radius=135).encode(
-    text=alt.Text("Percentage:Q", format=".1%"),
-    order=alt.Order("Count:Q", sort="descending"),
-    color=alt.value("black")
-).transform_filter(
-    # Filter out labels for slices smaller than 3%
-    alt.datum.Percentage > 0.03
-)
-
-
-# --- Inner Ring (Gender) ---
-
-# Base chart with transformations to calculate percentages
-gender_base = alt.Chart(gender_counts).encode(
-    theta=alt.Theta("Count:Q", stack=True)
-).transform_joinaggregate(
-    TotalGenderCount='sum(Count)',
-    groupby=[]
-).transform_calculate(
-    Percentage="datum.Count / datum.TotalGenderCount"
-)
-
-# Inner Pie Marks (Solid circle)
-inner_pie = gender_base.mark_arc(outerRadius=70, innerRadius=0).encode(
-    # Custom colors to distinguish gender from major colors
-    color=alt.Color("Category:N", scale=alt.Scale(range=['#e7968a', '#8ec7e8'])),
-    order=alt.Order("Count:Q", sort="descending"),
-    tooltip=[
-        "Category:N",
-        alt.Tooltip("Count:Q", format=","),
-        alt.Tooltip("Percentage:Q", format=".1%", title="Proportion")
-    ]
-)
-
-# --- Combine Layers ---
-chart = (inner_pie + outer_pie + outer_text).properties(
-    title=f"Graduate Breakdown by Major and Overall Gender Split").interactive() # Allows zooming and panning
-
-st.altair_chart(chart)
