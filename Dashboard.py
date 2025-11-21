@@ -219,6 +219,17 @@ else:
     st.subheader("Employment")
     st.info("Required employment columns not found in dataset.")
 
+st.markdown("---")
+st.subheader("Employment Details Selector")
+
+# New Selector Widget to control visibility based on user request
+selected_status = st.selectbox(
+    "Select an employment status to view related details:", 
+    options=["Select Status", "Employed", "Unemployed", "Not in Labor Force"],
+    index=0
+)
+st.markdown("---")
+
 # Employment details
 def make_horizontal_bar_chart(labels, values, title, category_label, count_label):
     import pandas as _pd
@@ -244,66 +255,111 @@ def make_horizontal_bar_chart(labels, values, title, category_label, count_label
     return chart
 
 st.subheader("Employment Details")
-col4, col5 = st.columns(2)
+if selected_status == "Unemployed":
+	reason_prefix = "Employment.Reason for Not Working."
+	reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
 
-reason_prefix = "Employment.Reason for Not Working."
-reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
+	# Employment Reason for Not Working
+	st.subheader("Reason for Not Working")
+	if reason_cols:
+		reason_labels = [c.replace(reason_prefix, "") for c in reason_cols]
+		reason_values = filtered_df[reason_cols].fillna(0).sum(axis=0).astype(float).tolist()
+		reason_title = "Reason for Not Working"
+			
+		reason_chart = make_pie_chart(reason_labels, reason_values, reason_title)
+			
+		if reason_chart is not None:
+			st.altair_chart(reason_chart, use_container_width=False) 
+		else:
+			st.info("No 'Reason for Not Working' data to display for the current filter.")
+	else:
+		st.info("Reason for Not Working columns not found in dataset.")
 
-# Employment Reason for Not Working
-with col4:
-    st.subheader("Reason for Not Working")
-    if reason_cols:
-        reason_labels = [c.replace(reason_prefix, "") for c in reason_cols]
-        reason_values = filtered_df[reason_cols].fillna(0).sum(axis=0).astype(float).tolist()
-        reason_title = "Reason for Not Working"
-        
-        reason_chart = make_pie_chart(reason_labels, reason_values, reason_title)
-        
-        if reason_chart is not None:
-            st.altair_chart(reason_chart, use_container_width=False) 
-        else:
-            st.info("No 'Reason for Not Working' data to display for the current filter.")
-    else:
-        st.info("Reason for Not Working columns not found in dataset.")
-
-activity_prefix = "Employment.Work Activity."
-activity_cols = [c for c in filtered_df.columns if c.startswith(activity_prefix)]
 
 # Employment Work Activity
-with col5:
-    st.subheader("Work Activity")
-    
-    if activity_cols:
-        activity_labels = [c.replace(activity_prefix, "") for c in activity_cols]
-        activity_values = filtered_df[activity_cols].fillna(0).sum(axis=0).astype(float).tolist()
-        activity_title = "Work Activity"
+elif selected_status == "Employed":
+	activity_prefix = "Employment.Work Activity."
+	activity_cols = [c for c in filtered_df.columns if c.startswith(activity_prefix)]
 
-        top_df = pd.DataFrame({
-            "Activity": activity_labels, 
-            "Count": activity_values
-        })
+	st.subheader("Work Activity")
+	if activity_cols:
+		activity_labels = [c.replace(activity_prefix, "") for c in activity_cols]
+		activity_values = filtered_df[activity_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=0).astype(int).tolist()
+		activity_title = ""
 
-        top_df = top_df[top_df["Count"] > 0].sort_values(by="Count", ascending=False).head(3)
+		top_df = pd.DataFrame({
+			"Activity": activity_labels, 
+			"Count": activity_values
+		})
 
-        if not top_df.empty:
-            top_3_numbered_list = []
-            rank = 1
-            for index, row in top_df.iterrows():
-                top_3_numbered_list.append(f"{rank}. {row['Activity']}")
-                rank += 1
-            
-            st.markdown(f"**Top 3**")
-            st.markdown("\n".join(top_3_numbered_list))
+		top_df = top_df[top_df["Count"] > 0].sort_values(by="Count", ascending=False).head(3)
 
-        activity_chart = make_horizontal_bar_chart(activity_labels, activity_values, activity_title, "Activity", "Count")
-        
-        if activity_chart is not None:
-            st.altair_chart(activity_chart, use_container_width=True)
-            
-        else:
-            st.info("No 'Work Activity' data to display for the current filter.")
-    else:
-        st.info("Work Activity columns not found in dataset.")
+		if not top_df.empty:
+			top_3_numbered_list = []
+			rank = 1
+			for index, row in top_df.iterrows():
+				top_3_numbered_list.append(f"{rank}. {row['Activity']}")
+				rank += 1
+			
+			st.markdown(f"**Top 3**")
+			st.markdown("\n".join(top_3_numbered_list))
+
+		activity_chart = make_horizontal_bar_chart(activity_labels, activity_values, activity_title, "Activity", "Count")
+		
+		if activity_chart is not None:
+			st.altair_chart(activity_chart, use_container_width=True)
+			
+		else:
+			st.info("No 'Work Activity' data to display for the current filter.")
+	else:
+		st.info("Work Activity columns not found in dataset.")
+
+	st.subheader("Field Alignment")
+	col6, col7 = st.columns(2)
+
+	outside_field_prefix = "Employment.Reason Working Outside Field."
+	outside_field_cols = [c for c in filtered_df.columns if c.startswith(outside_field_prefix)]
+
+	with col6:
+		st.subheader("Working In vs. Outside Field")
+		if outside_field_cols:
+			outside_count = filtered_df[outside_field_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=0).sum().astype(int)
+		else:
+			outside_count = 0
+		
+		employed_col = "Employment.Status.Employed"
+		if employed_col in filtered_df.columns:
+			employed_total = filtered_df[employed_col].apply(pd.to_numeric, errors='coerce').fillna(0).sum().astype(int)
+			in_field_count = max(0, employed_total - outside_count)
+		else:
+			in_field_count = 0
+		
+		field_labels = ["Working in Field", "Working Outside Field"]
+		field_values = [in_field_count, outside_count]
+
+		field_chart = make_pie_chart(field_labels, field_values, "Field Alignment")
+
+		if field_chart is not None and (in_field_count > 0 or outside_count > 0):
+			st.altair_chart(field_chart, use_container_width=False)
+		else:
+			st.info("Employment Status or Outside Field reason columns are missing or data is zero.")
+
+	with col7:
+		st.subheader("Reasons for Working Outside Field")
+		
+		if outside_field_cols:
+			reason_labels = [c.replace(outside_field_prefix, "") for c in outside_field_cols]
+			reason_values = filtered_df[outside_field_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=0).astype(int).tolist()
+			reason_title = ""
+
+			reason_chart = make_horizontal_bar_chart(reason_labels, reason_values, reason_title, "Reason", "Count")
+			
+			if reason_chart is not None:
+				st.altair_chart(reason_chart, use_container_width=True)
+			else:
+				st.info("No data available for reasons working outside the field.")
+		else:
+			st.info("Reasons for Working Outside Field columns not found in dataset.")
 
 st.dataframe(filtered_df)
 
