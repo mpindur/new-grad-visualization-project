@@ -107,16 +107,18 @@ else:
 st.subheader(f"Data preview — Major: {majors_label}")
 st.write(f"Rows matching filter: {len(filtered_df):,}")
 
-# Show a small summary metric (median of the reported median salary for the filtered rows)
+# Compute median salary for later display under the employment chart
+median_salary = None
 if "Salaries.Median" in filtered_df.columns:
 	try:
-		median_salary = filtered_df["Salaries.Median"].replace({0: np.nan}).dropna().median()
-		if np.isfinite(median_salary):
-			st.metric(label="Median salary (median of rows)", value=f"${median_salary:,.0f}")
+		_temp_med = filtered_df["Salaries.Median"].replace({0: np.nan}).dropna().median()
+		# ensure numeric/finite
+		if np.isfinite(_temp_med):
+			median_salary = float(_temp_med)
 		else:
-			st.info("Median salary not available for the selection.")
+			median_salary = None
 	except Exception:
-		st.info("Could not compute median salary for the selection.")
+		median_salary = None
 
 # ---------------------
 # Pie charts: Ethnicity, Gender, Degree type (based on filtered_df)
@@ -137,9 +139,99 @@ def make_pie_chart(labels, values, title):
 	).properties(width=250, height=250)
 	return chart
 
+# ---------------------
+# Employed vs Unemployed donut chart (above the other pie charts)
+# ---------------------
+try:
+	emp_col = "Employment.Status.Employed"
+	unemp_col = "Employment.Status.Unemployed"
+	emp_sum = 0.0
+	unemp_sum = 0.0
+	if emp_col in filtered_df.columns:
+		emp_sum = float(filtered_df[emp_col].fillna(0).sum())
+	if unemp_col in filtered_df.columns:
+		unemp_sum = float(filtered_df[unemp_col].fillna(0).sum())
+
+	# Fallback: if explicit Unemployed column missing or zero, try summing reason-for-not-working columns
+	if unemp_sum == 0.0:
+		reason_prefix = "Employment.Reason for Not Working."
+		reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
+		if reason_cols:
+			# sum each row's reasons then total
+			unemp_sum = float(filtered_df[reason_cols].fillna(0).sum(axis=1).sum())
+
+	emp_chart = make_pie_chart(["Employed", "Unemployed"], [emp_sum, unemp_sum], "Employment status")
+	if emp_chart is not None:
+		# center the chart by placing it in the middle column and increase its size
+		left_col, center_col, right_col = st.columns([1, 2, 1])
+		with center_col:
+			# use a centered markdown header with slightly larger text
+			st.markdown("<h3 style='text-align:center; margin-bottom: 0.25rem;'>Employment Status</h3>", unsafe_allow_html=True)
+			# enlarge the chart by overriding its properties; keep use_container_width=False so sizing is explicit
+			st.altair_chart(emp_chart.properties(width=420, height=420), use_container_width=False)
+			# show the median salary centered under the donut chart
+			# center the block (so it sits under the chart) but left-align the text inside
+			try:
+				if median_salary is not None:
+					st.markdown(
+						f"<div style='margin-top:8px; margin-left:auto; margin-right:auto; width:260px;'>"
+						f"<div style='font-weight:600; text-align:left;'>Median salary</div>"
+						f"<div style='font-size:20px; text-align:left;'>${median_salary:,.0f}</div>"
+						f"</div>",
+						unsafe_allow_html=True,
+					)
+				else:
+					st.markdown(
+						"<div style='margin-top:8px; margin-left:auto; margin-right:auto; width:260px; color:#666; text-align:left;'>Median salary not available for the selection.</div>",
+						unsafe_allow_html=True,
+					)
+			except Exception:
+				# fail silently; don't break dashboard rendering
+				pass
+
+			# ---------------------
+			# Unemployment reasons breakdown table (centered under median)
+			# ---------------------
+			try:
+				reason_prefix = "Employment.Reason for Not Working."
+				reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
+				if reason_cols:
+					reasons_series = filtered_df[reason_cols].fillna(0).sum(axis=0)
+					reasons_df = pd.DataFrame({
+						"reason": [c.replace(reason_prefix, "") for c in reasons_series.index],
+						"count": reasons_series.values.astype(float),
+					})
+					total_reasons = reasons_df["count"].sum()
+					if total_reasons > 0:
+						# compute simple percent-of-reasons (original behavior)
+						reasons_df["percent"] = (reasons_df["count"] / total_reasons * 100).round(1)
+						reasons_df = reasons_df.sort_values("count", ascending=False).reset_index(drop=True)
+						# center a fixed-width container but left-align the table text
+						st.markdown("<div style='margin-left:auto; margin-right:auto; width:360px;'>", unsafe_allow_html=True)
+						st.markdown("<div style='font-weight:600; text-align:left; margin-top:8px;'>Unemployment reasons</div>", unsafe_allow_html=True)
+						display_df = reasons_df.copy()
+						display_df["count"] = display_df["count"].astype(int)
+						display_df["percent"] = display_df["percent"].apply(lambda x: f"{x:.1f}%")
+						st.table(display_df.rename(columns={"reason": "Reason", "count": "Count", "percent": "Percent"}))
+						st.markdown("</div>", unsafe_allow_html=True)
+					else:
+						st.markdown("<div style='margin-left:auto; margin-right:auto; width:360px; color:#666; text-align:left; margin-top:8px;'>No unemployment reason data available for the selection.</div>", unsafe_allow_html=True)
+				else:
+					st.markdown("<div style='margin-left:auto; margin-right:auto; width:360px; color:#666; text-align:left; margin-top:8px;'>No unemployment reason columns found in dataset.</div>", unsafe_allow_html=True)
+			except Exception:
+				# keep dashboard resilient
+				pass
+	else:
+		st.info("Employment status data not available for the current selection.")
+except Exception:
+	# Don't crash the dashboard for any unexpected data shapes; show a friendly info.
+	st.info("Could not compute employment donut chart for the current selection.")
+
+st.subheader("Demographics")
 col1, col2, col3 = st.columns(3)
 
 # Ethnicity pie
+
 eth_prefix = "Demographics.Ethnicity."
 eth_cols = [c for c in filtered_df.columns if c.startswith(eth_prefix)]
 if eth_cols:
