@@ -260,7 +260,7 @@ if current_status is None:
 
 st.subheader("Employment Details")
 
-if current_status == "Unemployed":
+if current_status == "Unemployed" or current_status == "Not in Labor Force":
     reason_prefix = "Employment.Reason for Not Working."
     reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
 
