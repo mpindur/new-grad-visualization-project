@@ -3,31 +3,20 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import preprocessing
-
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-# --- SESSION STATE INITIALIZATION ---
-# Initialize session state for employment status if it doesn't exist
 if 'selected_emp_status' not in st.session_state:
     st.session_state['selected_emp_status'] = None
-# ------------------------------------
 
-st.header("_Recent Graduates_ :red[Data]")
-
-st.markdown("A series of interactive dashboards to support exploration of the recent graduate dataset.")
-
-st.markdown("This is the raw data used to produce the dashboard:")
+st.header("_From the CORGIS Dataset Project_ :red[Recent Graduates]") # Reference from previous Dashboard homework
+st.markdown("The data in this dashboard comes from the National Survey of Recent College Graduates. Included is information about employment numbers, major information, and the earnings of different majors.")
 
 df = pd.read_csv("data/raw_graduates.csv")
 df = preprocessing.preproc(df)
 
-# ---------------------
-# Sidebar filters
-# ---------------------
-st.sidebar.header("Filters")
+st.sidebar.header("Filters") # For the filter code we referenced the previous Dashbboard homework
 
-# Build majors filter (use Education.Major column)
 majors_column = "Education.Major"
 if majors_column in df.columns:
     majors = sorted(df[majors_column].dropna().astype(str).unique())
@@ -40,7 +29,6 @@ selected_majors = st.sidebar.multiselect("Major", major_options, default=["All"]
 
 filtered_df = df.copy()
 
-# Apply major filter: keep rows whose Education.Major is in the selected majors
 if selected_majors and "All" not in selected_majors:
     if majors_column not in df.columns:
         st.warning(f"Major column {majors_column} not found in dataset. Showing all rows.")
@@ -51,10 +39,7 @@ if selected_majors and "All" not in selected_majors:
         except Exception:
             st.warning("Could not apply major filter due to unexpected column values. Showing all rows.")
 
-# ---------------------
-# Year filters (two dropdowns: start and end)
-# ---------------------
-if "Year" in df.columns:
+if "Year" in df.columns: #Got help from GitHub Copilot for year filter
     years_numeric = pd.to_numeric(df["Year"], errors="coerce").dropna().astype(int)
     present_years = sorted(years_numeric.unique()) if len(years_numeric) > 0 else []
     year_options = [""] + [str(y) for y in present_years]
@@ -87,7 +72,7 @@ if start_year != "":
     except Exception:
         st.warning("Could not apply year filter due to unexpected Year values.")
 
-st.markdown("Please choose a dashboard using the sidebar on the left.")
+st.markdown("Please filter through the data using the sidebar on the left.")
 
 # Quick summary for the selected major(s)
 if not selected_majors or "All" in selected_majors:
@@ -109,11 +94,9 @@ if "Salaries.Median" in filtered_df.columns:
     except Exception:
         st.info("Could not compute median salary for the selection.")
 
-# ---------------------
-# Chart functions
-# ---------------------
+# chart functions (since we use these charts multiple times we made them into functions)
 def make_pie_chart(labels, values, title):
-    import pandas as _pd
+    import pandas as _pd # to make the function self contained re-import the pandas library
     if len(labels) == 0 or sum(values) == 0:
         return None
     pie_df = _pd.DataFrame({"category": labels, "value": values})
@@ -121,44 +104,36 @@ def make_pie_chart(labels, values, title):
     if pie_df.empty:
         return None
     pie_df["pct"] = (pie_df["value"] / pie_df["value"].sum() * 100).round(1)
-    chart = alt.Chart(pie_df).mark_arc(innerRadius=20).encode(
+    chart = alt.Chart(pie_df).mark_arc(innerRadius=20).encode( # from previous Dashboard homework
         theta=alt.Theta(field="value", type="quantitative"),
         color=alt.Color(field="category", type="nominal", legend=alt.Legend(title=title)),
         tooltip=[alt.Tooltip("category:N", title=title), alt.Tooltip("value:Q", title="Count"), alt.Tooltip("pct:Q", title="%")],
     ).properties(width=250, height=250)
     return chart
 
-def make_horizontal_bar_chart(labels, values, title, category_label, count_label):
+def make_horizontal_bar_chart(labels, values, title, category_label, count_label): # from previous Dashboard homework
     import pandas as _pd
-    
     if len(labels) == 0 or sum(values) == 0:
         return None
-    
     bar_df = _pd.DataFrame({category_label: labels, count_label: values})
     bar_df = bar_df[bar_df[count_label] > 0]
-    
     if bar_df.empty:
         return None
-
     chart = alt.Chart(bar_df).mark_bar().encode(
-        x=alt.X(count_label, type='quantitative', title="Count", axis=alt.Axis(format=",")),
+        x=alt.X(count_label, type='quantitative', title="Count", axis=alt.Axis(format=",.0f")),
         y=alt.Y(category_label, sort='-x', title=category_label),
         tooltip=[
             alt.Tooltip(category_label, title=category_label), 
-            alt.Tooltip(count_label, title="Count", format=",")
-        ]
+            alt.Tooltip(count_label, title="Count", format=",")]
     ).properties(title=title, width="container").interactive()
-    
     return chart
 
-# ---------------------
-# Charts in Columns 1, 2, 3 (Ethnicity, Gender, Degree Type)
-# ---------------------
-col1, col2, col3 = st.columns(3)
+
+col1, col2, col3 = st.columns(3) # from previous Dashboard homework
 
 # Ethnicity pie
 eth_prefix = "Demographics.Ethnicity."
-eth_cols = [c for c in filtered_df.columns if c.startswith(eth_prefix)]
+eth_cols = [c for c in filtered_df.columns if c.startswith(eth_prefix)] # because its not in one column we have to find all columns that start with this prefix
 if eth_cols:
     eth_labels = [c.replace(eth_prefix, "") for c in eth_cols]
     eth_values = filtered_df[eth_cols].fillna(0).sum(axis=0).astype(float).tolist()
@@ -176,7 +151,7 @@ else:
 
 # Gender pie
 gen_prefix = "Demographics.Gender."
-gen_cols = [c for c in filtered_df.columns if c.startswith(gen_prefix)]
+gen_cols = [c for c in filtered_df.columns if c.startswith(gen_prefix)] # because its not in one column we have to find all columns that start with this prefix
 if gen_cols:
     gen_labels = [c.replace(gen_prefix, "") for c in gen_cols]
     gen_values = filtered_df[gen_cols].fillna(0).sum(axis=0).astype(float).tolist()
@@ -194,7 +169,7 @@ else:
 
 # Degree type pie
 deg_prefix = "Education.Degrees."
-deg_cols = [c for c in filtered_df.columns if c.startswith(deg_prefix)]
+deg_cols = [c for c in filtered_df.columns if c.startswith(deg_prefix)] # because its not in one column we have to find all columns that start with this prefix
 if deg_cols:
     deg_labels = [c.replace(deg_prefix, "") for c in deg_cols]
     deg_values = filtered_df[deg_cols].fillna(0).sum(axis=0).astype(float).tolist()
@@ -210,20 +185,23 @@ else:
         st.subheader("Degree type")
         st.info("Degree columns not found in dataset.")
 
+# Employment charts
+        
 emp_cols = ["Employment.Status.Employed", "Employment.Status.Unemployed", "Employment.Status.Not in Labor Force"]
-selection_data = None
-SELECTION_NAME = "EmploymentStatusSelect"
+selection_data = None # this is for the selection interactive part the user can select a portion of the graph and it will trigger to show correlated graphs
+SELECTION_NAME = "EmploymentStatusSelect" # Status being Employed, Unemployed, Not in Labor Force
 
-if all(c in filtered_df.columns for c in emp_cols):
+# main interaction pie chart (again, you can click on the sections to view related graphs)
+if all(c in filtered_df.columns for c in emp_cols): # true only if all columns exist and returns "true"
     emp_labels = ["Employed", "Unemployed", "Not in Labor Force"]
     emp_values = filtered_df[emp_cols].fillna(0).sum(axis=0).astype(float).tolist()
 
-    import pandas as _pd
+    import pandas as _pd 
     pie_df = _pd.DataFrame({"category": emp_labels, "value": emp_values})
     pie_df = pie_df[pie_df["value"] > 0]
     pie_df["pct"] = (pie_df["value"] / pie_df["value"].sum() * 100).round(1)
 
-    selection = alt.selection_point(fields=['category'], name=SELECTION_NAME)
+    selection = alt.selection_point(fields=['category'], name=SELECTION_NAME) # Referenced(for the selection): https://altair-viz.github.io/altair-tutorial/notebooks/06-Selections.html
 
     emp_chart = alt.Chart(pie_df).mark_arc(innerRadius=40).encode(
         theta=alt.Theta(field="value", type="quantitative"),
@@ -244,7 +222,7 @@ else:
     st.info("Required employment columns not found in dataset.")
 
 #selection
-if selection_data and 'selection' in selection_data:
+if selection_data and 'selection' in selection_data: # It did the selection fine but summoning the related graphs had error, so got help from Gemini to debug
     selection_dict = selection_data['selection']
     raw_named_selection = selection_dict.get(SELECTION_NAME)
 
@@ -257,14 +235,15 @@ current_status = st.session_state['selected_emp_status']
 
 st.markdown("---")
 
-if current_status is None:
-    st.info("Click the 'Employed' or 'Unemployed' slice on the chart above to view related details.")
-
 st.subheader("Employment Details")
 
-if current_status == "Unemployed" or current_status == "Not in Labor Force":
+if current_status is None:
+    st.info("Click the slices on the Employment chart above to view related details.")
+
+
+if current_status == "Unemployed" or current_status == "Not in Labor Force": # the "Reason for Not Working" is inclusive for both "Unemployed" and "Not in Labor Force"
     reason_prefix = "Employment.Reason for Not Working."
-    reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
+    reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)] # Again, theres multiple columns for this data so we have to find all that start with this prefix
 
     st.subheader("Reason for Not Working")
     if reason_cols:
@@ -297,7 +276,7 @@ elif current_status == "Employed":
             "Count": activity_values
         })
 
-        top_df = top_df[top_df["Count"] > 0].sort_values(by="Count", ascending=False).head(3)
+        top_df = top_df[top_df["Count"] > 0].sort_values(by="Count", ascending=False).head(3) # wanted to highlight the top 3 activities
 
         if not top_df.empty:
             top_3_numbered_list = []
@@ -319,9 +298,6 @@ elif current_status == "Employed":
     else:
         st.info("Work Activity columns not found in dataset.")
 
-    st.markdown("---") 
-
-    st.subheader("Field Alignment")
     col6, col7 = st.columns(2)
 
     outside_field_prefix = "Employment.Reason Working Outside Field."
@@ -330,7 +306,7 @@ elif current_status == "Employed":
     with col6:
         st.subheader("Working In vs. Outside Field")
         if outside_field_cols:
-            outside_count = filtered_df[outside_field_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=0).sum().astype(int)
+            outside_count = filtered_df[outside_field_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=0).sum().astype(int) # Referenced previous homeworks with apply(), fillna()
         else:
             outside_count = 0
         
@@ -353,11 +329,10 @@ elif current_status == "Employed":
 
     with col7:
         st.subheader("Reasons for Working Outside Field")
-        
         if outside_field_cols:
             reason_labels = [c.replace(outside_field_prefix, "") for c in outside_field_cols]
             reason_values = filtered_df[outside_field_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=0).astype(int).tolist()
-            reason_title = "Reasons Outside Field"
+            reason_title = ""
 
             reason_chart = make_horizontal_bar_chart(reason_labels, reason_values, reason_title, "Reason", "Count")
             
