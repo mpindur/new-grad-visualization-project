@@ -11,7 +11,7 @@ def preproc(df):
 
     df['Year'] = df['Year'].astype("Int64")
 
-    df["Education.Major"] = df["Education.Major"].astype(str).str.lower().str.strip()
+    # df["Education.Major"] = df["Education.Major"].astype(str).str.lower().str.strip()
 
     mean = df["Salaries.Mean"]
     std = df["Salaries.Standard Deviation"]
