@@ -193,6 +193,118 @@ else:
 		st.subheader("Degree type")
 		st.info("Degree columns not found in dataset.")
 
+# Employment Status pie
+emp_cols = ["Employment.Status.Employed", "Employment.Status.Unemployed", "Employment.Status.Not in Labor Force"]
+if all(c in filtered_df.columns for c in emp_cols):
+    emp_labels = ["Employed", "Unemployed", "Not in Labor Force"]
+    emp_values = filtered_df[emp_cols].fillna(0).sum(axis=0).astype(float).tolist()
+
+    import pandas as _pd
+    pie_df = _pd.DataFrame({"category": emp_labels, "value": emp_values})
+    pie_df = pie_df[pie_df["value"] > 0]
+    pie_df["pct"] = (pie_df["value"] / pie_df["value"].sum() * 100).round(1)
+
+    emp_chart = alt.Chart(pie_df).mark_arc(innerRadius=40).encode(
+        theta=alt.Theta(field="value", type="quantitative"),
+        color=alt.Color(field="category", type="nominal", legend=alt.Legend(title="Employment Status")),
+        tooltip=[alt.Tooltip("category:N", title="Employment Status"), alt.Tooltip("value:Q", title="Count"), alt.Tooltip("pct:Q", title="%")],
+    ).properties(width=500, height=500) 
+
+    st.subheader("Employment")
+    if emp_chart is not None:
+        st.altair_chart(emp_chart, use_container_width=False)
+    else:
+        st.info("No employment data to display for the current filter.")
+else:
+    st.subheader("Employment")
+    st.info("Required employment columns not found in dataset.")
+
+# Employment details
+def make_horizontal_bar_chart(labels, values, title, category_label, count_label):
+    import pandas as _pd
+    
+    if len(labels) == 0 or sum(values) == 0:
+        return None
+    
+    bar_df = _pd.DataFrame({category_label: labels, count_label: values})
+    bar_df = bar_df[bar_df[count_label] > 0]
+    
+    if bar_df.empty:
+        return None
+
+    chart = alt.Chart(bar_df).mark_bar().encode(
+        x=alt.X(count_label, title="Count", axis=alt.Axis(format=",")),
+        y=alt.Y(category_label, sort='-x', title=category_label),
+        tooltip=[
+            alt.Tooltip(category_label, title=category_label), 
+            alt.Tooltip(count_label, title="Count", format=",")
+        ]
+    ).properties(title=title, width="container").interactive()
+    
+    return chart
+
+st.subheader("Employment Details")
+col4, col5 = st.columns(2)
+
+reason_prefix = "Employment.Reason for Not Working."
+reason_cols = [c for c in filtered_df.columns if c.startswith(reason_prefix)]
+
+# Employment Reason for Not Working
+with col4:
+    st.subheader("Reason for Not Working")
+    if reason_cols:
+        reason_labels = [c.replace(reason_prefix, "") for c in reason_cols]
+        reason_values = filtered_df[reason_cols].fillna(0).sum(axis=0).astype(float).tolist()
+        reason_title = "Reason for Not Working"
+        
+        reason_chart = make_pie_chart(reason_labels, reason_values, reason_title)
+        
+        if reason_chart is not None:
+            st.altair_chart(reason_chart, use_container_width=False) 
+        else:
+            st.info("No 'Reason for Not Working' data to display for the current filter.")
+    else:
+        st.info("Reason for Not Working columns not found in dataset.")
+
+activity_prefix = "Employment.Work Activity."
+activity_cols = [c for c in filtered_df.columns if c.startswith(activity_prefix)]
+
+# Employment Work Activity
+with col5:
+    st.subheader("Work Activity")
+    
+    if activity_cols:
+        activity_labels = [c.replace(activity_prefix, "") for c in activity_cols]
+        activity_values = filtered_df[activity_cols].fillna(0).sum(axis=0).astype(float).tolist()
+        activity_title = "Work Activity"
+
+        top_df = pd.DataFrame({
+            "Activity": activity_labels, 
+            "Count": activity_values
+        })
+
+        top_df = top_df[top_df["Count"] > 0].sort_values(by="Count", ascending=False).head(3)
+
+        if not top_df.empty:
+            top_3_numbered_list = []
+            rank = 1
+            for index, row in top_df.iterrows():
+                top_3_numbered_list.append(f"{rank}. {row['Activity']}")
+                rank += 1
+            
+            st.markdown(f"**Top 3**")
+            st.markdown("\n".join(top_3_numbered_list))
+
+        activity_chart = make_horizontal_bar_chart(activity_labels, activity_values, activity_title, "Activity", "Count")
+        
+        if activity_chart is not None:
+            st.altair_chart(activity_chart, use_container_width=True)
+            
+        else:
+            st.info("No 'Work Activity' data to display for the current filter.")
+    else:
+        st.info("Work Activity columns not found in dataset.")
+
 st.dataframe(filtered_df)
 
 
