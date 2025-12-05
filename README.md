@@ -1,6 +1,3 @@
-Readme File: In the repository's Readme.md, list title, team members, summary image, abstract, link to paper, video, running instructions for the software, link to the application (e.g. a webpage), and other optional materials. Include a breakdown of how the work was split among the group members and a commentary on the project process.
-
-
 # New Grad Opportunities Visualization Project
 ## Team Members: Victor Wang, Sarah Yun, Mark Pindur, Ojas Vashishtha
 
